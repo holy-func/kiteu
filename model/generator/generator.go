@@ -38,6 +38,16 @@ func (c *Context) Yield(v any) any {
 	return receivedArg
 }
 
+func (c *Context) YieldGen(gen GeneratorModel) any {
+	curRet := gen.Next(nil)
+	for !curRet.Done {
+		c.ret <- curRet.Value
+		curRet = gen.Next(<-c.arg)
+	}
+	return curRet.Value
+
+}
+
 func (g *JSGenerator) nextStep(v any) any {
 	g.arg <- v
 	return <-g.ret
@@ -78,7 +88,16 @@ func (g *JSGenerator) Throw(err any) (ret *Ret) {
 	return ret
 }
 
-func Generator(f func(*Context, ...[]any) any, args ...[]any) GeneratorModel {
+func ToGenerator[T any](arr []T) GeneratorModel {
+	return Generator(func(ctx *Context, _ ...any) any {
+		for _, v := range arr {
+			ctx.Yield(v)
+		}
+		return nil
+	})
+}
+
+func Generator(f func(*Context, ...any) any, args ...any) GeneratorModel {
 	ctx := &Context{arg: make(chan any), ret: make(chan any)}
 	go func() {
 		<-ctx.arg
